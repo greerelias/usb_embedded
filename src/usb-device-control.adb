@@ -37,44 +37,42 @@ with USB.Utils;
 
 package body USB.Device.Control is
 
-   function Need_ZLP (Len     : Buffer_Len;
-                      wLength : UInt16;
-                      EP_Size : Packet_Size)
-                      return Boolean;
+   function Need_ZLP
+     (Len : Buffer_Len; wLength : UInt16; EP_Size : Packet_Size)
+      return Boolean;
 
    --------------
    -- Need_ZLP --
    --------------
 
-   function Need_ZLP (Len     : Buffer_Len;
-                      wLength : UInt16;
-                      EP_Size : Packet_Size)
-                      return Boolean
+   function Need_ZLP
+     (Len : Buffer_Len; wLength : UInt16; EP_Size : Packet_Size) return Boolean
    is (Len < Buffer_Len (wLength)
-       and then
-       Len /= 0
-       and then
-       Len mod Buffer_Len (EP_Size) = 0);
+       and then Len /= 0
+       and then Len mod Buffer_Len (EP_Size) = 0);
 
    -----------
    -- Setup --
    -----------
 
-   procedure Setup (This : in out USB_Device_Stack;
-                            EP   : EP_Id)
-   is
+   procedure Setup (This : in out USB_Device_Stack; EP : EP_Id) is
       Req : Setup_Data renames This.Ctrl.Req;
    begin
 
-      if This.Ctrl.State not in
-        Idle |
+      if This.Ctrl.State
+         not in Idle
+              |
 
-         --  We accept the Status_Out state here because some UDC (samdx1) will
-         --  skip the control ZLP OUT if a new setup request is received.
-        Status_Out
+              --  We accept the Status_Out state here because some UDC (samdx1) will
+              --  skip the control ZLP OUT if a new setup request is received.
+              Status_Out
+              | Status_In -- STM32 seems to require this?
       then
-         raise Program_Error with "Not expecting setup in '" &
-           This.Ctrl.State'Img & "' control state";
+         raise Program_Error
+           with
+             "Not expecting setup in '"
+             & This.Ctrl.State'Img
+             & "' control state";
       end if;
 
       This.Ctrl.State := Idle;
@@ -99,24 +97,21 @@ package body USB.Device.Control is
    procedure Control_In (This : in out USB_Device_Stack) is
    begin
       case This.Ctrl.State is
-         when Data_In =>
+         when Data_In      =>
             Send_Chunk (This);
 
          when Last_Data_In =>
             This.Ctrl.State := Status_Out;
-            This.UDC.EP_Ready_For_Data (0,
-                                        This.Max_Packet_Size,
-                                        True);
+            This.UDC.EP_Ready_For_Data (0, This.Max_Packet_Size, True);
 
-         when Status_In =>
+         when Status_In    =>
             if Verbose then
                Put_Line ("Status_In");
             end if;
 
             --  Exception: handle set address request here
             if This.Ctrl.Req.RType = (Dev, 0, Stand, Host_To_Device)
-              and then
-                This.Ctrl.Req.Request = Req_Set_Address'Enum_Rep
+              and then This.Ctrl.Req.Request = Req_Set_Address'Enum_Rep
 
             then
                This.UDC.Set_Address (UInt7 (This.Ctrl.Req.Value and 16#7F#));
@@ -125,10 +120,12 @@ package body USB.Device.Control is
 
             This.Ctrl.State := Idle;
 
-         when others =>
+         when others       =>
             if Verbose then
-               Put_Line ("Control_In: Unexpected state '" &
-                           This.Ctrl.State'Img & "'");
+               Put_Line
+                 ("Control_In: Unexpected state '"
+                  & This.Ctrl.State'Img
+                  & "'");
             end if;
 
             This.Stall_Control_EP;
@@ -139,12 +136,11 @@ package body USB.Device.Control is
    -- Control_Out --
    -----------------
 
-   procedure Control_Out (This : in out USB_Device_Stack;
-                          BCNT :        Packet_Size)
+   procedure Control_Out (This : in out USB_Device_Stack; BCNT : Packet_Size)
    is
    begin
       case This.Ctrl.State is
-         when Status_Out =>
+         when Status_Out    =>
 
             if BCNT /= 0 then
                raise Program_Error with "ZLP expected for Status_Out";
@@ -152,14 +148,14 @@ package body USB.Device.Control is
 
             This.Ctrl.State := Idle;
 
-         when Data_Out =>
+         when Data_Out      =>
 
             --  Receive a chunk
             Receive_Chunk (This);
 
             --  Check if the next chunk is going to be the last
-            if (Buffer_Len (This.Ctrl.Req.Length) - This.Ctrl.Len) <=
-              Buffer_Len (This.Max_Packet_Size)
+            if (Buffer_Len (This.Ctrl.Req.Length) - This.Ctrl.Len)
+              <= Buffer_Len (This.Max_Packet_Size)
             then
                This.Ctrl.State := Last_Data_Out;
             end if;
@@ -172,10 +168,12 @@ package body USB.Device.Control is
             --  Handle the request now that we have the full payload
             Handle_Write_Request (This);
 
-         when others =>
+         when others        =>
             if Verbose then
-               Put_Line ("Control_Out: Unexpected state '" &
-                           This.Ctrl.State'Img & "'");
+               Put_Line
+                 ("Control_Out: Unexpected state '"
+                  & This.Ctrl.State'Img
+                  & "'");
             end if;
 
             This.Stall_Control_EP;
@@ -186,8 +184,7 @@ package body USB.Device.Control is
    -- Setup_Read --
    ----------------
 
-   procedure Setup_Read (This : in out USB_Device_Stack)
-   is
+   procedure Setup_Read (This : in out USB_Device_Stack) is
    begin
       if Verbose then
          Put_Line ("Control_Setup_Read");
@@ -226,13 +223,9 @@ package body USB.Device.Control is
 
       if Req.Length > UInt16 (This.Max_Packet_Size) then
          This.Ctrl.State := Data_Out;
-         This.UDC.EP_Ready_For_Data (0,
-                                     This.Max_Packet_Size,
-                                     True);
+         This.UDC.EP_Ready_For_Data (0, This.Max_Packet_Size, True);
       else
-         This.UDC.EP_Ready_For_Data (0,
-                                     Packet_Size (Req.Length),
-                                     True);
+         This.UDC.EP_Ready_For_Data (0, Packet_Size (Req.Length), True);
          This.Ctrl.State := Last_Data_Out;
       end if;
 
@@ -242,8 +235,8 @@ package body USB.Device.Control is
    -- Device_Request --
    --------------------
 
-   function Device_Request  (This : in out USB_Device_Stack)
-                             return Setup_Request_Answer
+   function Device_Request
+     (This : in out USB_Device_Stack) return Setup_Request_Answer
    is
       Req : Setup_Data renames This.Ctrl.Req;
    begin
@@ -252,23 +245,31 @@ package body USB.Device.Control is
       end if;
 
       case Req.Request is
-         when Req_Get_Status'Enum_Rep =>
+         when Req_Get_Status'Enum_Rep        =>
             return Get_Status (This, Req);
-         when Req_Clear_Feature'Enum_Rep =>
+
+         when Req_Clear_Feature'Enum_Rep     =>
             raise Program_Error with "CLEAR_FEATURE not implemented";
-         when Req_Set_Feature'Enum_Rep =>
+
+         when Req_Set_Feature'Enum_Rep       =>
             raise Program_Error with "SET_FEATURE not implemented";
-         when Req_Set_Address'Enum_Rep =>
+
+         when Req_Set_Address'Enum_Rep       =>
             return Set_Address (This, Req);
-         when Req_Get_Descriptor'Enum_Rep =>
+
+         when Req_Get_Descriptor'Enum_Rep    =>
             return Get_Descriptor (This, Req);
-         when Req_Set_Descriptor'Enum_Rep =>
+
+         when Req_Set_Descriptor'Enum_Rep    =>
             raise Program_Error with "SET_DESCRIPTOR not implemented";
+
          when Req_Get_Configuration'Enum_Rep =>
             raise Program_Error with "GET_CONFIGURATION not implemented";
+
          when Req_Set_Configuration'Enum_Rep =>
             return Set_Configuration (This, Req);
-         when others =>
+
+         when others                         =>
             return Not_Supported;
       end case;
    end Device_Request;
@@ -277,43 +278,46 @@ package body USB.Device.Control is
    -- Endpoint_Request --
    ----------------------
 
-   function Endpoint_Request (This : in out USB_Device_Stack)
-                              return Setup_Request_Answer
+   function Endpoint_Request
+     (This : in out USB_Device_Stack) return Setup_Request_Answer
    is
-      Req   : Setup_Data renames This.Ctrl.Req;
-      Id    : constant EP_Id := EP_Id (Req.Index and 16#0F#);
-      Dir   : constant EP_Dir := (if (Req.Index and 16#08#) /= 0
-                                  then EP_In
-                                  else EP_Out);
+      Req : Setup_Data renames This.Ctrl.Req;
+      Id  : constant EP_Id := EP_Id (Req.Index and 16#0F#);
+      Dir : constant EP_Dir :=
+        (if (Req.Index and 16#08#) /= 0 then EP_In else EP_Out);
 
       EP : constant EP_Addr := (Id, Dir);
    begin
       case Req.Request is
-         when Req_Get_Status'Enum_Rep =>
+         when Req_Get_Status'Enum_Rep    =>
             raise Program_Error with "EP GET_STATUS not implemented";
 
          when Req_Clear_Feature'Enum_Rep =>
             case Req.Value is
-               when 0 => -- HALT ENDPOINT
+               when 0      =>
+                  -- HALT ENDPOINT
                   This.UDC.EP_Stall (EP, False);
                   return Handled;
+
                when others =>
                   raise Program_Error with "Invalid EP CLEAR_FEATURE";
             end case;
 
-         when Req_Set_Feature'Enum_Rep =>
+         when Req_Set_Feature'Enum_Rep   =>
             case Req.Value is
-               when 0 => -- HALT ENDPOINT
+               when 0      =>
+                  -- HALT ENDPOINT
                   This.UDC.EP_Stall (EP, True);
                   return Handled;
+
                when others =>
                   raise Program_Error with "Invalid EP SET_FEATURE";
             end case;
 
-         when Req_Sync_Feature'Enum_Rep =>
+         when Req_Sync_Feature'Enum_Rep  =>
             raise Program_Error with "EP SYNCH_FEATURE not implemented";
 
-         when others =>
+         when others                     =>
             raise Program_Error with "Invalid EP request";
       end case;
    end Endpoint_Request;
@@ -322,8 +326,8 @@ package body USB.Device.Control is
    -- Dispatch_Request_To_Class --
    -------------------------------
 
-   function Dispatch_Request_To_Class (This : in out USB_Device_Stack)
-                                       return Setup_Request_Answer
+   function Dispatch_Request_To_Class
+     (This : in out USB_Device_Stack) return Setup_Request_Answer
    is
       Req : Setup_Data renames This.Ctrl.Req;
 
@@ -331,25 +335,26 @@ package body USB.Device.Control is
    begin
       for Class of This.Classes loop
 
-         exit when Class .Ptr = null;
+         exit when Class.Ptr = null;
 
          if Req.RType.Recipient /= Iface
            or else
 
-         --  Check to dispatch an interface request to the right class
-           (Interface_Id (Req.Index)
-            in Class.First_Iface .. Class.Last_Iface)
+           --  Check to dispatch an interface request to the right class
+           (Interface_Id (Req.Index) in Class.First_Iface .. Class.Last_Iface)
          then
 
             if Req.RType.Dir = Device_To_Host then
 
-               Res := Class.Ptr.Setup_Read_Request
-                 (Req, This.Ctrl.Buf, This.Ctrl.Len);
+               Res :=
+                 Class.Ptr.Setup_Read_Request
+                   (Req, This.Ctrl.Buf, This.Ctrl.Len);
 
                return Res;
             else
-               return Class.Ptr.Setup_Write_Request
-                 (Req, This.Ctrl.Buffer (1 .. Natural (Req.Length)));
+               return
+                 Class.Ptr.Setup_Write_Request
+                   (Req, This.Ctrl.Buffer (1 .. Natural (Req.Length)));
             end if;
          end if;
       end loop;
@@ -361,10 +366,10 @@ package body USB.Device.Control is
    -- Dispatch_Request --
    ----------------------
 
-   function Dispatch_Request (This : in out USB_Device_Stack)
-                              return Setup_Request_Answer
+   function Dispatch_Request
+     (This : in out USB_Device_Stack) return Setup_Request_Answer
    is
-      Req : Setup_Data renames This.Ctrl.Req;
+      Req    : Setup_Data renames This.Ctrl.Req;
       Answer : Setup_Request_Answer;
    begin
       if Verbose then
@@ -381,14 +386,17 @@ package body USB.Device.Control is
       end if;
 
       case Req.RType.Recipient is
-         when Dev =>
+         when Dev      =>
             return Device_Request (This);
-         when Iface =>
+
+         when Iface    =>
             --  Send interface request to the class
             return Dispatch_Request_To_Class (This);
+
          when Endpoint =>
             return Endpoint_Request (This);
-         when Other =>
+
+         when Other    =>
             Put_Line ("Control Other Req not impl");
       end case;
 
@@ -409,9 +417,8 @@ package body USB.Device.Control is
             This.Ctrl.Len :=
               Buffer_Len'Min (This.Ctrl.Len, Buffer_Len (Req.Length));
 
-            This.Ctrl.Need_ZLP := Need_ZLP (This.Ctrl.Len,
-                                            Req.Length,
-                                            This.Max_Packet_Size);
+            This.Ctrl.Need_ZLP :=
+              Need_ZLP (This.Ctrl.Len, Req.Length, This.Max_Packet_Size);
 
             Send_Chunk (This);
          else
@@ -453,14 +460,14 @@ package body USB.Device.Control is
    begin
       if This.Ctrl.Len > Buffer_Len (This.Max_Packet_Size) then
 
-         USB.Utils.Copy (Src   => This.Ctrl.Buf,
-                         Dst   => This.Ctrl.EP_In_Addr,
-                         Count => This.Max_Packet_Size);
+         USB.Utils.Copy
+           (Src   => This.Ctrl.Buf,
+            Dst   => This.Ctrl.EP_In_Addr,
+            Count => This.Max_Packet_Size);
 
          This.UDC.EP_Send_Packet (0, This.Max_Packet_Size);
 
-         This.Ctrl.Buf := This.Ctrl.Buf +
-           Buffer_Len (This.Max_Packet_Size);
+         This.Ctrl.Buf := This.Ctrl.Buf + Buffer_Len (This.Max_Packet_Size);
 
          This.Ctrl.Len := This.Ctrl.Len - Buffer_Len (This.Max_Packet_Size);
 
@@ -468,9 +475,10 @@ package body USB.Device.Control is
 
       else
          --  Copy data to the UDC EP buffer
-         USB.Utils.Copy (Src   => This.Ctrl.Buf,
-                         Dst   => This.Ctrl.EP_In_Addr,
-                         Count => Packet_Size (This.Ctrl.Len));
+         USB.Utils.Copy
+           (Src   => This.Ctrl.Buf,
+            Dst   => This.Ctrl.EP_In_Addr,
+            Count => Packet_Size (This.Ctrl.Len));
 
          This.UDC.EP_Send_Packet (0, Packet_Size (This.Ctrl.Len));
 
@@ -492,13 +500,15 @@ package body USB.Device.Control is
 
    procedure Receive_Chunk (This : in out USB_Device_Stack) is
       Read_Size : constant Buffer_Len :=
-        Buffer_Len'Min (Buffer_Len (This.Max_Packet_Size),
-                        Buffer_Len (This.Ctrl.Req.Length) - This.Ctrl.Len);
+        Buffer_Len'Min
+          (Buffer_Len (This.Max_Packet_Size),
+           Buffer_Len (This.Ctrl.Req.Length) - This.Ctrl.Len);
    begin
       --  Copy data from the UDC EP buffer
-      USB.Utils.Copy (Src   => This.Ctrl.EP_Out_Addr,
-                      Dst   => This.Ctrl.Buf,
-                      Count => Packet_Size (Read_Size));
+      USB.Utils.Copy
+        (Src   => This.Ctrl.EP_Out_Addr,
+         Dst   => This.Ctrl.Buf,
+         Count => Packet_Size (Read_Size));
 
       This.Ctrl.Len := This.Ctrl.Len + Read_Size;
       This.Ctrl.Buf := This.Ctrl.Buf + Read_Size;
